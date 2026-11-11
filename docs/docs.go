@@ -109,8 +109,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "exp": {
-                    "description": "Exp is the lifetime of the link in seconds.",
+                    "description": "Exp is the lifetime of the link in seconds, at most 604800 (7 days).",
                     "type": "integer",
+                    "maximum": 604800,
                     "example": 604800
                 },
                 "url": {

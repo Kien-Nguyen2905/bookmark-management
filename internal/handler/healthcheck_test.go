@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 func TestHealthCheck(t *testing.T) {
@@ -22,16 +22,16 @@ func TestHealthCheck(t *testing.T) {
 	testCases := []struct {
 		name string
 
-		setupMockSvc func() *svc_mocks.HealthCheck
+		setupMockSvc func(ctx context.Context) *svc_mocks.HealthCheck
 
 		expectedStatus   int
 		expectedResponse string
 	}{
 		{
 			name: "success - health check returns OK",
-			setupMockSvc: func() *svc_mocks.HealthCheck {
+			setupMockSvc: func(ctx context.Context) *svc_mocks.HealthCheck {
 				mockSvc := &svc_mocks.HealthCheck{}
-				mockSvc.On("Check", mock.Anything).Return(model.HealthCheckResponse{
+				mockSvc.On("Check", ctx).Return(model.HealthCheckResponse{
 					Message:     "OK",
 					ServiceName: "bookmark_service",
 					InstanceID:  "instance-1",
@@ -43,9 +43,9 @@ func TestHealthCheck(t *testing.T) {
 		},
 		{
 			name: "fail - service returns error",
-			setupMockSvc: func() *svc_mocks.HealthCheck {
+			setupMockSvc: func(ctx context.Context) *svc_mocks.HealthCheck {
 				mockSvc := &svc_mocks.HealthCheck{}
-				mockSvc.On("Check", mock.Anything).Return(model.HealthCheckResponse{}, errors.New("redis is down"))
+				mockSvc.On("Check", ctx).Return(model.HealthCheckResponse{}, errors.New("redis is down"))
 				return mockSvc
 			},
 			expectedStatus:   http.StatusInternalServerError,
@@ -62,7 +62,7 @@ func TestHealthCheck(t *testing.T) {
 			ginCtx, _ := gin.CreateTestContext(rec)
 			ginCtx.Request = httptest.NewRequest(http.MethodGet, "/health-check", nil)
 
-			mockSvc := tc.setupMockSvc()
+			mockSvc := tc.setupMockSvc(ginCtx)
 			hdl := NewHealthCheck(mockSvc)
 
 			hdl.Check(ginCtx)

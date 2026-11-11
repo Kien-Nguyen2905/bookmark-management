@@ -128,7 +128,7 @@ type engine struct {
 }
 
 func NewEngine(c *Config, redisClient *redis.Client) Engine {
-        <span class="cov10" title="7">e := &amp;engine{app: gin.Default(), cfg: c, redisClient: redisClient}
+        <span class="cov10" title="8">e := &amp;engine{app: gin.Default(), cfg: c, redisClient: redisClient}
         e.initRoutes()
         return e
 </span>}
@@ -138,20 +138,20 @@ func (e *engine) Start() error {
 </span>}
 
 func (e *engine) GetApp() *gin.Engine {
-        <span class="cov9" title="6">return e.app
+        <span class="cov9" title="7">return e.app
 </span>}
 
 func (e *engine) initRoutes() {
-        <span class="cov10" title="7">healthCheckRepo := repository.NewHealthCheck(e.redisClient)
+        <span class="cov10" title="8">healthCheckRepo := repository.NewHealthCheck(e.redisClient)
         healthCheckSvc := service.NewHealthCheck(e.cfg.AppName, e.cfg.InstanceID, healthCheckRepo)
         healthCheckHandler := handler.NewHealthCheck(healthCheckSvc)
 </span>
-        <span class="cov10" title="7">genPassSvc := service.NewGenPass()
+        <span class="cov10" title="8">genPassSvc := service.NewGenPass()
         urlStorageRepo := repository.NewURLStorage(e.redisClient)
         shortenURLSvc := service.NewShortenUrl(urlStorageRepo, genPassSvc)
         shortenHandler := handler.NewShortenLink(shortenURLSvc)
 </span>
-        <span class="cov10" title="7">e.app.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+        <span class="cov10" title="8">e.app.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
         e.app.GET("/health-check", healthCheckHandler.Check)
         e.app.POST("/v1/links/shorten", shortenHandler.CreateShortenLink)
 </span>}
@@ -199,7 +199,7 @@ type healthCheck struct {
 }
 
 func NewHealthCheck(svc service.HealthCheck) HealthCheck {
-        <span class="cov10" title="9">return &amp;healthCheck{svc: svc}
+        <span class="cov10" title="10">return &amp;healthCheck{svc: svc}
 </span>}
 
 // @Summary Health check
@@ -210,7 +210,7 @@ func NewHealthCheck(svc service.HealthCheck) HealthCheck {
 // @Failure 500 {object} map[string]string
 // @Router /health-check [get]
 func (h *healthCheck) Check(c *gin.Context) {
-        <span class="cov7" title="5">resp, err := h.svc.Check(c.Request.Context())
+        <span class="cov7" title="5">resp, err := h.svc.Check(c)
         if err != nil </span>{
                 <span class="cov3" title="2">c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
                 return
@@ -241,12 +241,12 @@ type shortenLink struct {
 }
 
 func NewShortenLink(svc service.ShortenUrl) ShortenLink {
-        <span class="cov10" title="14">return &amp;shortenLink{svc: svc}
+        <span class="cov10" title="18">return &amp;shortenLink{svc: svc}
 </span>}
 
 type shortenLinkInput struct {
-        // Exp is the lifetime of the link in seconds.
-        Exp int    `json:"exp" binding:"required,gt=0" example:"604800"`
+        // Exp is the lifetime of the link in seconds, at most 604800 (7 days).
+        Exp int    `json:"exp" binding:"required,gt=0,lte=604800" example:"604800"`
         URL string `json:"url" binding:"required,url" example:"https://example.com"`
 }
 
@@ -262,20 +262,20 @@ type shortenLinkInput struct {
 // @Failure 500 {object} map[string]string
 // @Router /v1/links/shorten [post]
 func (h *shortenLink) CreateShortenLink(c *gin.Context) {
-        <span class="cov8" title="10">input := &amp;shortenLinkInput{}
+        <span class="cov9" title="14">input := &amp;shortenLinkInput{}
         if err := c.ShouldBindJSON(input); err != nil </span>{
-                <span class="cov7" title="6">c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid Input"})
+                <span class="cov7" title="9">c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid Input"})
                 return
 </span>        }
 
-        <span class="cov5" title="4">exp := time.Duration(input.Exp) * time.Second
-        code, err := h.svc.CreateShortenLink(c.Request.Context(), input.URL, exp)
+        <span class="cov6" title="5">exp := time.Duration(input.Exp) * time.Second
+        code, err := h.svc.CreateShortenLink(c, input.URL, exp)
         if err != nil </span>{
                 <span class="cov3" title="2">c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
                 return
 </span>        }
 
-        <span class="cov3" title="2">c.JSON(http.StatusOK, gin.H{"code": code, "message": "Shorten URL generated successfully!"})</span>
+        <span class="cov4" title="3">c.JSON(http.StatusOK, gin.H{"code": code, "message": "Shorten URL generated successfully!"})</span>
 }
 </pre>
 		
@@ -332,7 +332,7 @@ import (
 
 // InitMockRedis starts an in-memory Redis and returns a client connected to it, for tests.
 func InitMockRedis(t *testing.T) *redis.Client {
-        <span class="cov10" title="11">mock := miniredis.RunT(t)
+        <span class="cov10" title="12">mock := miniredis.RunT(t)
         return redis.NewClient(&amp;redis.Options{
                 Addr: mock.Addr(),
         })
@@ -360,7 +360,7 @@ type healthCheck struct {
 }
 
 func NewHealthCheck(c *redis.Client) HealthCheck {
-        <span class="cov10" title="9">return &amp;healthCheck{c: c}
+        <span class="cov10" title="10">return &amp;healthCheck{c: c}
 </span>}
 
 func (h *healthCheck) Ping(ctx context.Context) error {
@@ -390,7 +390,7 @@ type urlStorage struct {
 }
 
 func NewURLStorage(c *redis.Client) URLStorage {
-        <span class="cov10" title="9">return &amp;urlStorage{c: c}
+        <span class="cov10" title="10">return &amp;urlStorage{c: c}
 </span>}
 
 func (s *urlStorage) StoreURL(ctx context.Context, key, url string, exp time.Duration) error {
@@ -416,7 +416,7 @@ type GenPass interface {
 type genPass struct{}
 
 func NewGenPass() GenPass {
-        <span class="cov6" title="13">return &amp;genPass{}
+        <span class="cov6" title="14">return &amp;genPass{}
 </span>}
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -468,10 +468,10 @@ type healthCheck struct {
 
 // NewHealthCheck generates a UUID as the instance id when instanceID is empty.
 func NewHealthCheck(serviceName, instanceID string, repo repository.HealthCheck) HealthCheck {
-        <span class="cov10" title="10">if instanceID == "" </span>{
-                <span class="cov8" title="6">instanceID = uuid.NewString()
+        <span class="cov10" title="11">if instanceID == "" </span>{
+                <span class="cov8" title="7">instanceID = uuid.NewString()
 </span>        }
-        <span class="cov10" title="10">return &amp;healthCheck{serviceName: serviceName, instanceID: instanceID, repo: repo}</span>
+        <span class="cov10" title="11">return &amp;healthCheck{serviceName: serviceName, instanceID: instanceID, repo: repo}</span>
 }
 
 func (h *healthCheck) Check(ctx context.Context) (model.HealthCheckResponse, error) {
@@ -512,7 +512,7 @@ type shortenUrl struct {
 }
 
 func NewShortenUrl(r repository.URLStorage, gen GenPass) ShortenUrl {
-        <span class="cov10" title="10">return &amp;shortenUrl{r: r, gen: gen}
+        <span class="cov10" title="11">return &amp;shortenUrl{r: r, gen: gen}
 </span>}
 
 func (s *shortenUrl) CreateShortenLink(ctx context.Context, url string, exp time.Duration) (string, error) {

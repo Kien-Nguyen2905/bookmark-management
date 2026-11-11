@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 func TestCreateShortenLink(t *testing.T) {
@@ -24,7 +24,7 @@ func TestCreateShortenLink(t *testing.T) {
 		name string
 
 		body         string
-		setupMockSvc func() *svc_mocks.ShortenUrl
+		setupMockSvc func(ctx context.Context) *svc_mocks.ShortenUrl
 
 		expectedStatus   int
 		expectedResponse string
@@ -32,9 +32,9 @@ func TestCreateShortenLink(t *testing.T) {
 		{
 			name: "success - shorten link successfully",
 			body: `{"url":"https://example.com","exp":3600}`,
-			setupMockSvc: func() *svc_mocks.ShortenUrl {
+			setupMockSvc: func(ctx context.Context) *svc_mocks.ShortenUrl {
 				mockSvc := &svc_mocks.ShortenUrl{}
-				mockSvc.On("CreateShortenLink", mock.Anything, "https://example.com", time.Hour).Return("abc1234", nil)
+				mockSvc.On("CreateShortenLink", ctx, "https://example.com", time.Hour).Return("abc1234", nil)
 				return mockSvc
 			},
 			expectedStatus:   http.StatusOK,
@@ -43,44 +43,70 @@ func TestCreateShortenLink(t *testing.T) {
 		{
 			name:             "fail - url is missing",
 			body:             `{"exp":3600}`,
-			setupMockSvc:     func() *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
+			setupMockSvc:     func(ctx context.Context) *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
 			expectedStatus:   http.StatusBadRequest,
 			expectedResponse: `{"error":"Invalid Input"}`,
 		},
 		{
 			name:             "fail - url is invalid",
 			body:             `{"url":"string","exp":3600}`,
-			setupMockSvc:     func() *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
+			setupMockSvc:     func(ctx context.Context) *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
 			expectedStatus:   http.StatusBadRequest,
 			expectedResponse: `{"error":"Invalid Input"}`,
 		},
 		{
 			name:             "fail - exp is missing",
 			body:             `{"url":"https://example.com"}`,
-			setupMockSvc:     func() *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
+			setupMockSvc:     func(ctx context.Context) *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
 			expectedStatus:   http.StatusBadRequest,
 			expectedResponse: `{"error":"Invalid Input"}`,
 		},
 		{
 			name:             "fail - exp is negative",
 			body:             `{"url":"https://example.com","exp":-1}`,
-			setupMockSvc:     func() *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
+			setupMockSvc:     func(ctx context.Context) *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"Invalid Input"}`,
+		},
+		{
+			name: "success - exp equals the maximum allowed (7 days)",
+			body: `{"url":"https://example.com","exp":604800}`,
+			setupMockSvc: func(ctx context.Context) *svc_mocks.ShortenUrl {
+				mockSvc := &svc_mocks.ShortenUrl{}
+				mockSvc.On("CreateShortenLink", ctx, "https://example.com", 7*24*time.Hour).Return("abc1234", nil)
+				return mockSvc
+			},
+			expectedStatus:   http.StatusOK,
+			expectedResponse: `{"code":"abc1234","message":"Shorten URL generated successfully!"}`,
+		},
+		{
+			name:             "fail - exp is above the maximum allowed",
+			body:             `{"url":"https://example.com","exp":604801}`,
+			setupMockSvc:     func(ctx context.Context) *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"Invalid Input"}`,
+		},
+		{
+			// 9223372037 seconds overflows time.Duration and would create a key without expiration
+			name:             "fail - exp is so large that it overflows time.Duration",
+			body:             `{"url":"https://example.com","exp":9223372037}`,
+			setupMockSvc:     func(ctx context.Context) *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
 			expectedStatus:   http.StatusBadRequest,
 			expectedResponse: `{"error":"Invalid Input"}`,
 		},
 		{
 			name:             "fail - body is not valid json",
 			body:             `{"url":`,
-			setupMockSvc:     func() *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
+			setupMockSvc:     func(ctx context.Context) *svc_mocks.ShortenUrl { return &svc_mocks.ShortenUrl{} },
 			expectedStatus:   http.StatusBadRequest,
 			expectedResponse: `{"error":"Invalid Input"}`,
 		},
 		{
 			name: "fail - service returns error",
 			body: `{"url":"https://example.com","exp":3600}`,
-			setupMockSvc: func() *svc_mocks.ShortenUrl {
+			setupMockSvc: func(ctx context.Context) *svc_mocks.ShortenUrl {
 				mockSvc := &svc_mocks.ShortenUrl{}
-				mockSvc.On("CreateShortenLink", mock.Anything, "https://example.com", time.Hour).Return("", errors.New("redis is down"))
+				mockSvc.On("CreateShortenLink", ctx, "https://example.com", time.Hour).Return("", errors.New("redis is down"))
 				return mockSvc
 			},
 			expectedStatus:   http.StatusInternalServerError,
@@ -98,7 +124,7 @@ func TestCreateShortenLink(t *testing.T) {
 			ginCtx.Request = httptest.NewRequest(http.MethodPost, "/v1/links/shorten", strings.NewReader(tc.body))
 			ginCtx.Request.Header.Set("Content-Type", "application/json")
 
-			mockSvc := tc.setupMockSvc()
+			mockSvc := tc.setupMockSvc(ginCtx)
 			hdl := NewShortenLink(mockSvc)
 
 			hdl.CreateShortenLink(ginCtx)

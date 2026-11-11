@@ -58,6 +58,18 @@ func TestCreateShortenLink(t *testing.T) {
 			},
 		},
 		{
+			name:           "fail - exp is too large, nothing is stored in redis",
+			body:           `{"url":"https://example.com","exp":9223372037}`,
+			expectedStatus: http.StatusBadRequest,
+			verify: func(t *testing.T, body []byte, c *redis.Client) {
+				assert.JSONEq(t, `{"error":"Invalid Input"}`, string(body))
+
+				keys, err := c.Keys(t.Context(), "*").Result()
+				assert.NoError(t, err)
+				assert.Empty(t, keys)
+			},
+		},
+		{
 			name: "fail - redis is down",
 			body: `{"url":"https://example.com","exp":3600}`,
 			setupMock: func(c *redis.Client) {

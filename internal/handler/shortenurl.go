@@ -23,8 +23,8 @@ func NewShortenLink(svc service.ShortenUrl) ShortenLink {
 }
 
 type shortenLinkInput struct {
-	// Exp is the lifetime of the link in seconds.
-	Exp int    `json:"exp" binding:"required,gt=0" example:"604800"`
+	// Exp is the lifetime of the link in seconds, at most 604800 (7 days).
+	Exp int    `json:"exp" binding:"required,gt=0,lte=604800" example:"604800"`
 	URL string `json:"url" binding:"required,url" example:"https://example.com"`
 }
 
@@ -47,7 +47,7 @@ func (h *shortenLink) CreateShortenLink(c *gin.Context) {
 	}
 
 	exp := time.Duration(input.Exp) * time.Second
-	code, err := h.svc.CreateShortenLink(c.Request.Context(), input.URL, exp)
+	code, err := h.svc.CreateShortenLink(c, input.URL, exp)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
 		return
